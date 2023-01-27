@@ -2,6 +2,7 @@
 #include <EEPROM.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 
 #define PORT      85
@@ -17,7 +18,7 @@ struct Config
 {
     char ap_ssid[32] = "BoTSy";
     char ap_pass[32] = "12345678";
-    char sta_ssid[32] = "";
+    char sta_ssid[32] = "0";
     char sta_pass[32] = "";
     //char sta_ssid[32] = "Oxygen";
     //char sta_pass[32] = "*4@B7|RPj4nO";
@@ -26,9 +27,10 @@ struct Config
 Config config;
 
 DNSServer dnsServer;
+HTTPClient http;
 ESP8266WebServer server(PORT);
 
-IPAddress APIP(172, 0, 0, 1);
+IPAddress APIP(192, 168, 0, 1);
 
 String HTML_Page_Index();
 String HTML_JS_Index(String SSIDs);
@@ -66,7 +68,8 @@ void setup()
       pinMode(BLUE, OUTPUT);
       */
     EEPROM.begin(4096);
-    //EEPROM.get(0, config);
+    EEPROM.get(0, config);
+    //EEPROM.put(0, config);
 
     server.on("/", headroot);
     server.onNotFound(handle_NotFound);
@@ -156,6 +159,8 @@ void Start_AP() {
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(config.ap_ssid, config.ap_pass);
+
+    //dnsServer.start(DNS_PORT, "*", APIP);
     /*
       String str = "\nAP SSID: ";
       str += config.ap_ssid;
@@ -252,52 +257,59 @@ void handle_Connect() {
 void Connecting_to_WiFi() {
     bool connected = false;
     int tick = 0;
-    Start_STA();
-    while (true)
+    if (String(config.sta_ssid) == nullptr || String(config.sta_ssid).equals(""))
     {
-        Serial.print(".");
-        delay(100);
-        //int n = WiFi.scanNetworks();
-        if (WiFi.status() == WL_CONNECTED)
+        Serial.println("Нет данных о подключеной сети в системе");
+    }
+    else {
+        Start_STA();
+        while (true)
         {
-            connected = true;
-            break;
-        }
-        if (tick >= WAITING_TICKS)
-        {
-            connected = false;
-            break;
-        }
-        if (WiFi.status() == WL_IDLE_STATUS)
-        {
-            //когда WiFi-сеть переключается с одного статуса на другой.
-            //Serial.print("WiFi-сеть переключается с одного статуса на другой");
-        }
-        else if (WiFi.status() == WL_NO_SSID_AVAIL)
-        {
-            //если заданный SSID находится вне зоны доступа.
-            //Serial.print("Заданный SSID находится вне зоны доступа");
-        }
-        else if (WiFi.status() == WL_CONNECT_FAILED)
-        {
-            //если неправильный пароль.
-            //Serial.print("Неправильный пароль");
-        }
-        else if (WiFi.status() == WL_DISCONNECTED)
-        {
-            //если модуль не находится в режиме станции.
-            //Serial.print("Модуль не находится в режиме станции");
-        }
-        else
-        {
-            //просто ожиданние
-        }
-        tick += 100;
-    };
+            Serial.print(".");
+            delay(100);
+            //int n = WiFi.scanNetworks();
+            if (WiFi.status() == WL_CONNECTED)
+            {
+                connected = true;
+                break;
+            }
+            if (tick >= WAITING_TICKS)
+            {
+                connected = false;
+                break;
+            }
+            if (WiFi.status() == WL_IDLE_STATUS)
+            {
+                //когда WiFi-сеть переключается с одного статуса на другой.
+                //Serial.print("WiFi-сеть переключается с одного статуса на другой");
+            }
+            else if (WiFi.status() == WL_NO_SSID_AVAIL)
+            {
+                //если заданный SSID находится вне зоны доступа.
+                //Serial.print("Заданный SSID находится вне зоны доступа");
+            }
+            else if (WiFi.status() == WL_CONNECT_FAILED)
+            {
+                //если неправильный пароль.
+                //Serial.print("Неправильный пароль");
+            }
+            else if (WiFi.status() == WL_DISCONNECTED)
+            {
+                //если модуль не находится в режиме станции.
+                //Serial.print("Модуль не находится в режиме станции");
+            }
+            else
+            {
+                //просто ожиданние
+            }
+            tick += 100;
+        };
+    }
     if (connected)
     {
         //успешно подключено, отправить страницу с доанными о WIFI и локальном ip + кнопку отключения
         EEPROM.put(0, config);
+        EEPROM.commit();
         Serial.println("Connect success");
     }
     else {
@@ -446,20 +458,38 @@ String HTML_JS_Index(String SSIDs) {
     js += "   \"https://media.tenor.com/VW6fRXVCok4AAAAC/inugami-korone.gif\",";
     js += "   \"https://media.tenor.com/U6FZAy_RGSIAAAAd/gaminglight-imperialrp.gif\",";
     js += " ]\n";
+    js += " let APIP = http://"; js += WiFi.softAPIP(); js += "/\n";
+    js += " let STAIP = http://"; js += WiFi.localIP(); js += "/\n";
     js += " let SSIDs = ["; js += SSIDs; js += "]\n";
+    js += " let http = new XMLHttpRequest()\n";
+    js += " let params = APIP + '/SSID=' + localStorage.getItem('SSID') + '&PASS=' + localStorage.getItem('PASS')\n";
+    js += " http.open('POST', APIP, true)\n";
+    js += " http.setRequestHeader('Content-type', 'application/x-www-form-urlencoded')";
+    js += " http.onreadystatechange = function() {\n";
+    js += "     if(http.readyState == 4 && http.status == 200) {\n";
+    js += "         alert(http.responseText)}}\n";
+    js += " http.send(params);\n";
     js += "   document.getElementById(\"Connect_Button\").addEventListener(\"click\", function (e) {\n";
-    js += "   if(document.getElementById(\"SSID\").value == \"\" || document.getElementById(\"PASS\").value == \"\") {\n";
-    js += "     alert(\"Заполните все поля\")\n";
+    js += "   if(document.getElementById(\"SSID\").value == \"\") {\n";
+    js += "     alert(\"Заполните поле \"Имя сети\" или выберите из списка доступных сетей\");\n";
     js += "     return\n";
     js += "   }\n";
     js += "   if(SSIDs.indexOf(document.getElementById(\"SSID\").value) == -1) {\n";
     js += "       alert(\"Такой сети не существует\")\n";
     js += "       return\n";
     js += "   }\n";
+    js += "   \\\\document.location = '/SSID=' + localStorage.getItem('SSID') + 'PASS=' + localStorage.getItem('PASS')\n";
     js += "   document.getElementById(\"loader\").innerHTML = `<img style=\"margin-bottom: 5px; border-radius: 5px;\" src=\"` + loading_links[getRandom(0, 10)] + `\" width=\"200\">`\n";
     js += "   })\n";
-    js += "   for (let item of document.querySelectorAll('ul > li')) {item.addEventListener('click', function (e){document.getElementById('SSID').value = item.querySelectorAll('div')[0].querySelectorAll('h4')[0].innerText},{})}\n";
-    js += "</script>";
+    js += "   for (let item of document.querySelectorAll('ul > li')) {item.addEventListener('click', function (e){\n";
+    js += "     document.getElementById('SSID').value = item.querySelectorAll('div')[0].querySelectorAll('h4')[0].innerText\n";
+    js += "     if(item.querySelectorAll('div')[2].querySelectorAll('h4')[0].innerText == \"Открытая сеть\"){\n";
+    js += "         document.getElementsByClassName('field')[1].style = `display: none;`\n";
+    js += "     } else {\n";
+    js += "         document.getElementsByClassName('field')[1].style = `display: block;`\n";
+    js += "     }\n";
+    js += "   },{})}\n";
+    js += "</script>\n";
     return js;
 }
 
