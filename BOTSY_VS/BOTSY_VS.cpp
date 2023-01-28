@@ -9,10 +9,12 @@
 #define DNS_PORT  53
 
 #define WAITING_TICKS 10000
+
 /*
-#define RED     0
-#define GREEN   1
-#define BLUE    2*/
+#define RED     5
+#define GREEN   6
+#define BLUE    7
+*/
 
 struct Config
 {
@@ -30,13 +32,14 @@ DNSServer dnsServer;
 HTTPClient http;
 ESP8266WebServer server(PORT);
 
-IPAddress APIP(192, 168, 0, 1);
+IPAddress APIP(192, 168, 1, 1);
 
 String HTML_Page_Index();
 String HTML_JS_Index(String SSIDs);
 String HTML_Style_Index();
 String HTML_Style_Errors();
 String HTML_Error(int num_of_error);
+String jQuery();
 void Connecting_to_WiFi();
 void Start_AP_STA();
 void Start_AP(); //hotspot
@@ -62,16 +65,21 @@ void setup()
     //flicker_red = true;
 
     Serial.begin(115200);
+
     /*
-      pinMode(RED, OUTPUT);
-      pinMode(GREEN, OUTPUT);
-      pinMode(BLUE, OUTPUT);
-      */
+    pinMode(RED, OUTPUT);
+    pinMode(GREEN, OUTPUT);
+    pinMode(BLUE, OUTPUT);
+    */
+
+    //digitalWrite(RED, HIGH);
+
     EEPROM.begin(4096);
     EEPROM.get(0, config);
     //EEPROM.put(0, config);
 
     server.on("/", headroot);
+    server.on("/connect", handle_Connect);  // привязать функцию обработчика к URL-пути
     server.onNotFound(handle_NotFound);
 
     Serial.println("");
@@ -110,6 +118,9 @@ void setup()
     //flicker_red = false;
     //Start_AP();
     Connecting_to_WiFi();
+
+    //digitalWrite(RED, LOW);
+
     Serial.println("end setup");
 
 }
@@ -152,6 +163,12 @@ void loop()
 }
 
 void Start_AP() {
+    /*
+    digitalWrite(RED, LOW);
+    digitalWrite(GREEN, LOW);
+    digitalWrite(BLUE, LOW);
+    */
+
     Serial.println("Trying connecting AP mode");
 
     //flicker_blue = true;
@@ -186,9 +203,20 @@ void Start_AP() {
     */
     //flicker_blue = false;
     //blue = true;
+
+    //digitalWrite(BLUE, HIGH);
+
+    server.enableCORS(false);
+
 }
 
 void Start_STA() {
+    /*
+    digitalWrite(RED, LOW);
+    digitalWrite(GREEN, LOW);
+    digitalWrite(BLUE, LOW);
+    */
+
     Serial.println("Trying connecting STA mode");
 
     //flicker_green = true;
@@ -220,9 +248,20 @@ void Start_STA() {
     */
     //flicker_green = false;
     //green = true;
+
+    //digitalWrite(GREEN, HIGH);
+
+    server.enableCORS(false);
+
 }
 
 void Start_AP_STA() {
+    /*
+    digitalWrite(RED, LOW);
+    digitalWrite(GREEN, LOW);
+    digitalWrite(BLUE, LOW);
+    */
+
     WiFi.mode(WIFI_AP_STA);
     WiFi.enableAP(true);
     WiFi.enableSTA(true);
@@ -248,10 +287,13 @@ void Start_AP_STA() {
 
     server.on("/", headroot);
     server.begin();
-}
 
-void handle_Connect() {
-    //server.send(200, "text/html", HTML_Page_Index());
+    server.enableCORS(false);
+
+    /*
+    digitalWrite(GREEN, HIGH);
+    digitalWrite(BLUE, HIGH);
+    */
 }
 
 void Connecting_to_WiFi() {
@@ -338,6 +380,20 @@ void headroot() {
     server.send(200, "text/html", HTML_Page_Index());
 }
 
+void handle_Connect() {
+    Serial.println("One more trying to connect");
+    String message = "Number of args received:";
+    message += server.args();
+    for (int i = 0; i < server.args(); i++)
+    {
+        message += "Arg nº" + (String)i + " –>";
+        message += server.argName(i) + ": ";
+        message += server.arg(i) + "\n";
+    }
+    Serial.println(message);
+    //server.send(200, "text/html", HTML_Page_Index());
+}
+
 void handle_NotFound() {
     server.send(404, "text/html", HTML_Error(404));
 }
@@ -418,13 +474,13 @@ String HTML_Page_Index() {
     page += "        </ul>";
     page += "        <div class=\"field\">";
     page += "            <div class=\"text-field text-field_floating-3\">";
-    page += "                <input class=\"text-field__input\" type=\"SSID\" id=\"SSID\" name=\"SSID\" placeholder=\"SSID\">";
+    page += "                <input class=\"text-field__input\" type=\"text\" id=\"SSID\" name=\"SSID\" placeholder=\"SSID\">";
     page += "                <label class=\"text-field__label\" for=\"SSID\">Имя сети</label>";
     page += "            </div>";
     page += "        </div>";
     page += "        <div class=\"field\">";
     page += "            <div class=\"text-field text-field_floating-3\">";
-    page += "                <input class=\"text-field__input\" type=\"PASS\" id=\"PASS\" name=\"PASS\" placeholder=\"PASS\">";
+    page += "                <input class=\"text-field__input\" type=\"text\" id=\"PASS\" name=\"PASS\" placeholder=\"PASS\">";
     page += "                <label class=\"text-field__label\" for=\"PASS\">Пароль</label>";
     page += "            </div>";
     page += "        </div>";
@@ -435,6 +491,7 @@ String HTML_Page_Index() {
     page += "    </div>";
     page += "    </main>";
     page += HTML_JS_Index(SSIDs);
+    page += jQuery();
     page += "</body>";
     page += "</html>";
     return page;
@@ -443,6 +500,8 @@ String HTML_Page_Index() {
 String HTML_JS_Index(String SSIDs) {
     String js = "";
     js += "<script>\n";
+    js += "   document.getElementById(\"SSID\").value = localStorage.getItem(\"SSID\")\n";
+    js += "   document.getElementById(\"PASS\").value = localStorage.getItem(\"PASS\")\n";
     js += "   function getRandom(min, max) {";
     js += "       return Math.floor(Math.random() * (max - min)) + min;";
     js += "   }\n";
@@ -458,27 +517,38 @@ String HTML_JS_Index(String SSIDs) {
     js += "       \"https://media.tenor.com/VW6fRXVCok4AAAAC/inugami-korone.gif\",";
     js += "       \"https://media.tenor.com/U6FZAy_RGSIAAAAd/gaminglight-imperialrp.gif\",";
     js += "   ]\n";
-    js += "   let APIP = http://"; js += WiFi.softAPIP(); js += "/\n";
-    js += "   let STAIP = http://"; js += WiFi.localIP(); js += "/\n";
+    js += "   let APIP = \"http://"; js += WiFi.softAPIP().toString(); js += "/\"\n";
+    js += "   let STAIP = \"http://"; js += WiFi.localIP().toString(); js += "/\"\n";
     js += "   let SSIDs = ["; js += SSIDs; js += "]\n";
-    js += "   let http = new XMLHttpRequest()\n";
-    js += "   let params = APIP + '/SSID=' + localStorage.getItem('SSID') + '&PASS=' + localStorage.getItem('PASS')\n";
-    js += "   http.open('POST', APIP, true)\n";
-    js += "   http.setRequestHeader('Content-type', 'application/x-www-form-urlencoded')";
-    js += "   http.onreadystatechange = function() {\n";
-    js += "   if(http.readyState == 4 && http.status == 200) {\n";
-    js += "       alert(http.responseText)}}\n";
+    js += "   //let http = new XMLHttpRequest()\n";
+    js += "   //http.open('POST', APIP, true)\n";
+    js += "   //http.setRequestHeader('Content-type', 'application/x-www-form-urlencoded')\n";
+    js += "   //http.onreadystatechange = function() {\n";
+    js += "   //if(http.readyState == 4 && http.status == 200) {\n";
+    js += "       //alert(http.responseText)}}\n";
     js += "   document.getElementById(\"Connect_Button\").addEventListener(\"click\", function (e) {\n";
     js += "       if(document.getElementById(\"SSID\").value == \"\") {\n";
-    js += "           alert(\"Заполните поле \"Имя сети\" или выберите из списка доступных сетей\");\n";
+    js += "           alert(\"Заполните поле \\\"Имя сети\\\" или выберите из списка доступных сетей\");\n";
     js += "           return\n";
     js += "       }\n";
     js += "       if(SSIDs.indexOf(document.getElementById(\"SSID\").value) == -1) {\n";
     js += "           alert(\"Такой сети не существует\")\n";
     js += "           return\n";
     js += "       }\n";
-    js += "       http.send(params);\n";
-    js += "       \\\\document.location = '/SSID=' + localStorage.getItem('SSID') + 'PASS=' + localStorage.getItem('PASS')\n";
+    js += "       //let params = APIP + 'connect?SSID=' + document.getElementById(\"SSID\").value + '&PASS=' + document.getElementById(\"PASS\").value\n";
+    js += "       //alert(params)\n";
+    js += "       //http.send(params);\n";
+    js += "       localStorage.setItem(\"SSID\", document.getElementById(\"SSID\").value)\n";
+    js += "       localStorage.setItem(\"PASS\", document.getElementById(\"PASS\").value)\n";
+    js += "       //document.location = '/SSID=' + localStorage.getItem('SSID') + 'PASS=' + localStorage.getItem('PASS')\n";
+    js += "       $.ajax({\n";
+    js += "           url: '/connect',\n";
+    js += "           type: 'POST',\n";
+    js += "           data: JSON.stringify({SSID:document.getElementById(\"SSID\").value, PASS:document.getElementById(\"PASS\").value}),\n";
+    js += "           success: function(){alert(\"Successfully post\")},\n";
+    js += "           contentType: \"application/json\",\n";
+    js += "           dataType: 'json'\n";
+    js += "       })\n";
     js += "       document.getElementById(\"loader\").innerHTML = `<img style=\"margin-bottom: 5px; border-radius: 5px;\" src=\"` + loading_links[getRandom(0, 10)] + `\" width=\"200\">`\n";
     js += "   })\n";
     js += "   for (let item of document.querySelectorAll('ul > li')) {item.addEventListener('click', function (e){\n";
@@ -616,4 +686,8 @@ String HTML_Error(int num_of_error) {
     page += "</body>";
     page += "</html>";
     return page;
+}
+
+String jQuery() {
+    return "<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js\"></script>";
 }
