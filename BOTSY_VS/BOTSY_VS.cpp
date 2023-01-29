@@ -1,14 +1,15 @@
-﻿#include <Arduino.h>
-#include <EEPROM.h>
-#include <DNSServer.h>
+﻿#include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
+#include <ArduinoJson.h>
+#include <DNSServer.h>
+#include <Arduino.h>
+#include <EEPROM.h>
 
 #define PORT      85
 #define DNS_PORT  53
 
-#define WAITING_TICKS 10000
+#define WAITING_TICKS 15000
 
 /*
 #define RED     5
@@ -173,6 +174,8 @@ void Start_AP() {
 
     //flicker_blue = true;
 
+    WiFi.disconnect(true);
+
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(config.ap_ssid, config.ap_pass);
@@ -221,6 +224,8 @@ void Start_STA() {
 
     //flicker_green = true;
 
+    WiFi.disconnect(true);
+
     WiFi.mode(WIFI_STA);
     WiFi.enableAP(false);
     WiFi.enableSTA(true);
@@ -262,11 +267,16 @@ void Start_AP_STA() {
     digitalWrite(BLUE, LOW);
     */
 
+    WiFi.disconnect(true);
+
     WiFi.mode(WIFI_AP_STA);
     WiFi.enableAP(true);
     WiFi.enableSTA(true);
+    WiFi.softAPConfig(APIP, APIP, IPAddress(255, 255, 255, 0));
+    WiFi.softAP(config.ap_ssid, config.ap_pass);
     WiFi.begin(config.sta_ssid, config.sta_pass);
 
+    /*
     String str = "\nAP SSID: ";
     str += config.ap_ssid;
     str += "\nAP PASS: ";
@@ -287,6 +297,7 @@ void Start_AP_STA() {
 
     server.on("/", headroot);
     server.begin();
+    */
 
     server.enableCORS(false);
 
@@ -304,7 +315,7 @@ void Connecting_to_WiFi() {
         Serial.println("Нет данных о подключеной сети в системе");
     }
     else {
-        Start_STA();
+        Start_AP_STA();
         while (true)
         {
             Serial.print(".");
@@ -320,30 +331,7 @@ void Connecting_to_WiFi() {
                 connected = false;
                 break;
             }
-            if (WiFi.status() == WL_IDLE_STATUS)
-            {
-                //когда WiFi-сеть переключается с одного статуса на другой.
-                //Serial.print("WiFi-сеть переключается с одного статуса на другой");
-            }
-            else if (WiFi.status() == WL_NO_SSID_AVAIL)
-            {
-                //если заданный SSID находится вне зоны доступа.
-                //Serial.print("Заданный SSID находится вне зоны доступа");
-            }
-            else if (WiFi.status() == WL_CONNECT_FAILED)
-            {
-                //если неправильный пароль.
-                //Serial.print("Неправильный пароль");
-            }
-            else if (WiFi.status() == WL_DISCONNECTED)
-            {
-                //если модуль не находится в режиме станции.
-                //Serial.print("Модуль не находится в режиме станции");
-            }
-            else
-            {
-                //просто ожиданние
-            }
+
             tick += 100;
         };
     }
@@ -356,6 +344,60 @@ void Connecting_to_WiFi() {
     }
     else {
         //неудалось подключится, отправить странуцу с ошибкой
+
+        /*
+        WL_NO_SHIELD        = 255,   // for compatibility with WiFi Shield library
+        WL_IDLE_STATUS      = 0,
+        WL_NO_SSID_AVAIL    = 1,
+        WL_SCAN_COMPLETED   = 2,
+        WL_CONNECTED        = 3,
+        WL_CONNECT_FAILED   = 4,
+        WL_CONNECTION_LOST  = 5,
+        WL_WRONG_PASSWORD   = 6,
+        WL_DISCONNECTED     = 7
+        */
+
+        if (WiFi.status() == WL_NO_SHIELD)
+        {
+            //когда WiFi-сеть переключается с одного статуса на другой.
+            Serial.print("для совместимости с библиотекой WiFi Shield");
+        }
+        if (WiFi.status() == WL_IDLE_STATUS)
+        {
+            //когда WiFi-сеть переключается с одного статуса на другой.
+            Serial.print("WiFi-сеть переключается с одного статуса на другой");
+        }
+        if (WiFi.status() == WL_NO_SSID_AVAIL)
+        {
+            //если заданный SSID находится вне зоны доступа.
+            Serial.print("Заданный SSID находится вне зоны доступа");
+        }
+        if (WiFi.status() == WL_SCAN_COMPLETED)
+        {
+            //если неправильный пароль.
+            Serial.print("Сканирование сетей закончено");
+        }
+        if (WiFi.status() == WL_CONNECT_FAILED)
+        {
+            //если неправильный пароль.
+            Serial.print("Ошибка подключения");
+        }
+        if (WiFi.status() == WL_CONNECTION_LOST)
+        {
+            //если неправильный пароль.
+            Serial.print("Соединение потеряно");
+        }
+        if (WiFi.status() == WL_WRONG_PASSWORD)
+        {
+            //если неправильный пароль.
+            Serial.print("Немправтлььный пароль");
+        }
+        if (WiFi.status() == WL_DISCONNECTED)
+        {
+            //если модуль не находится в режиме станции.
+            Serial.print("Модуль не находится в режиме станции");
+        }
+
         Serial.println("Connect failed");
         Start_AP();
     }
@@ -381,16 +423,22 @@ void headroot() {
 }
 
 void handle_Connect() {
-    Serial.println("One more trying to connect");
-    String message = "Number of args received:";
-    message += server.args();
     for (int i = 0; i < server.args(); i++)
-    {
-        message += "Arg nº" + (String)i + " –>";
-        message += server.argName(i) + ": ";
-        message += server.arg(i) + "\n";
-    }
-    Serial.println(message);
+        Serial.println(server.arg(i));
+    DynamicJsonDocument parsed(1024);
+    deserializeJson(parsed, server.arg(0));
+
+    Serial.println(String(parsed["SSID"]));
+    Serial.println(String(parsed["PASS"]));
+
+    //String(parsed["SSID"]).toCharArray(config.sta_ssid, String(parsed["SSID"]).length);
+    //String(parsed["PASS"]).toCharArray(config.sta_pass, String(parsed["PASS"]).length);
+
+    strcpy(config.sta_ssid, ((String)parsed["SSID"]).c_str());
+    strcpy(config.sta_pass, ((String)parsed["PASS"]).c_str());
+
+    Connecting_to_WiFi();
+
     //server.send(200, "text/html", HTML_Page_Index());
 }
 
@@ -555,6 +603,7 @@ String HTML_JS_Index(String SSIDs) {
     js += "       document.getElementById('SSID').value = item.querySelectorAll('div')[0].querySelectorAll('h4')[0].innerText\n";
     js += "       if(item.querySelectorAll('div')[2].querySelectorAll('h4')[0].innerText == \"Открытая сеть\"){\n";
     js += "           document.getElementsByClassName('field')[1].style = `display: none;`\n";
+    js += "           document.getElementById(\"PASS\").value = \"\"";
     js += "       } else {\n";
     js += "           document.getElementsByClassName('field')[1].style = `display: block;`\n";
     js += "       }\n";
