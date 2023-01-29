@@ -5,6 +5,10 @@
 #include <DNSServer.h>
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <SPI.h>
+#include <SD.h>
+
+#include "JQuery.h"
 
 #define PORT      85
 #define DNS_PORT  53
@@ -35,12 +39,17 @@ ESP8266WebServer server(PORT);
 
 IPAddress APIP(192, 168, 1, 1);
 
+File jQuery;
+String jQuery_str;
+String JQ;
+
 String HTML_Page_Index();
 String HTML_JS_Index(String SSIDs);
 String HTML_Style_Index();
 String HTML_Style_Errors();
 String HTML_Error(int num_of_error);
-String jQuery();
+String jQuery_sd();
+//String jQuery();
 void Connecting_to_WiFi();
 void Start_AP_STA();
 void Start_AP(); //hotspot
@@ -118,6 +127,31 @@ void setup()
 
     //flicker_red = false;
     //Start_AP();
+
+    Serial.print("Initializing SD card...");
+
+    if (!SD.begin(D8)) {
+        Serial.println("initialization failed!");
+    }
+    else {
+        Serial.println("initialization done.");
+    }
+
+    if (SD.exists("JQuery.js")) {
+        Serial.println("JQuery.js exists.");
+        //jQuery = SD.open("JQuery.js", FILE_READ);
+        //for(size_t i = 0; i < jQuery.size(); i++){
+        //    jQuery_str += (char)jQuery.read();
+        //}
+        //jQuery.close();
+        //jQuery_str = jQuery_sd();
+        //Serial.println(jQuery_str);
+        //Serial.println("JQuery.js readed");
+    }
+    else {
+        Serial.println("JQuery.js doesn't exists.");
+    }
+
     Connecting_to_WiFi();
 
     //digitalWrite(RED, LOW);
@@ -267,6 +301,8 @@ void Start_AP_STA() {
     digitalWrite(BLUE, LOW);
     */
 
+    Serial.println("Trying connecting AP & STA mode");
+
     WiFi.disconnect(true);
 
     WiFi.mode(WIFI_AP_STA);
@@ -341,6 +377,7 @@ void Connecting_to_WiFi() {
         EEPROM.put(0, config);
         EEPROM.commit();
         Serial.println("Connect success");
+        server.send(200, "text/html", HTML_Page_Index());
     }
     else {
         //неудалось подключится, отправить странуцу с ошибкой
@@ -419,7 +456,9 @@ void Connecting_to_WiFi() {
 }
 
 void headroot() {
-    server.send(200, "text/html", HTML_Page_Index());
+    String page = HTML_Page_Index();
+    Serial.println(page);
+    server.send(200, "text/html", page);
 }
 
 void handle_Connect() {
@@ -454,25 +493,29 @@ struct WiFi_Sort {
 };
 
 String HTML_Page_Index() {
+    if (!SD.exists("JQuery.js")) {
+        //Serial.println("JQuery.js doesn't exists.");
+        //jQuery = SD.open("JQuery.js", FILE_READ).readString();
+    }
     String SSIDs = "";
-    String page = "";
-    page += "<!DOCTYPE html>";
-    page += "<html lang=\"en\">";
-    page += "<head>";
-    page += "    <meta charset=\"UTF-8\">";
-    page += "    <title>BoTSy</title>";
-    page += "    <link rel=\"icon\" href=\"https://img.icons8.com/cotton/256/wifi--v2.png 2x\">";
+    String page = F("");
+    page += F("<!DOCTYPE html>\n");
+    page += "<html lang=\"en\">\n";
+    page += "<head>\n";
+    page += "    <meta charset=\"UTF-8\">\n";
+    page += "    <title>BoTSy</title>\n";
+    page += "    <link rel=\"icon\" href=\"https://img.icons8.com/cotton/256/wifi--v2.png 2x\">\n";
     page += HTML_Style_Index();
-    page += "    </head>";
-    page += "<body>";
-    page += "<main>";
-    page += "    <div class=\"success\">";
-    page += "    </div>";
-    page += "    <h1 class=\"visible\">Body Tracking System</h1>";
-    page += "    <h1 class=\"hidden\">BoTSy</h1>";
-    page += "    <div id=\"wifi_list\">";
-    page += "        <h2>Список Wi-Fi точек</h2>";
-    page += "        <ul id=\"wifi_list_list\">";
+    page += "    </head>\n";
+    page += "<body>\n";
+    page += "<main>\n";
+    page += "    <div class=\"success\">\n";
+    page += "    </div>\n";
+    page += "    <h1 class=\"visible\">Body Tracking System</h1>\n";
+    page += "    <h1 class=\"hidden\">BoTSy</h1>\n";
+    page += "    <div id=\"wifi_list\">\n";
+    page += "        <h2>Список Wi-Fi точек</h2>\n";
+    page += "        <ul id=\"wifi_list_list\">\n";
     int n = WiFi.scanNetworks();
     WiFi_Sort wifi_sort[n];
     if (n == 0) {
@@ -519,34 +562,51 @@ String HTML_Page_Index() {
             page += "</li>";
         }
     }
-    page += "        </ul>";
-    page += "        <div class=\"field\">";
-    page += "            <div class=\"text-field text-field_floating-3\">";
-    page += "                <input class=\"text-field__input\" type=\"text\" id=\"SSID\" name=\"SSID\" placeholder=\"SSID\">";
-    page += "                <label class=\"text-field__label\" for=\"SSID\">Имя сети</label>";
-    page += "            </div>";
-    page += "        </div>";
-    page += "        <div class=\"field\">";
-    page += "            <div class=\"text-field text-field_floating-3\">";
-    page += "                <input class=\"text-field__input\" type=\"text\" id=\"PASS\" name=\"PASS\" placeholder=\"PASS\">";
-    page += "                <label class=\"text-field__label\" for=\"PASS\">Пароль</label>";
-    page += "            </div>";
-    page += "        </div>";
-    page += "        <div class=\"center\">";
-    page += "            <button id=\"Connect_Button\">Подключиться</button>";
-    page += "        </div>";
-    page += "        <div id=\"loader\" class=\"center\"></div>";
-    page += "    </div>";
-    page += "    </main>";
+    page += "        </ul>\n";
+    page += "        <div class=\"field\">\n";
+    page += "            <div class=\"text-field text-field_floating-3\">\n";
+    page += "                <input class=\"text-field__input\" type=\"text\" id=\"SSID\" name=\"SSID\" placeholder=\"SSID\">\n";
+    page += "                <label class=\"text-field__label\" for=\"SSID\">Имя сети</label>\n";
+    page += "            </div>\n";
+    page += "        </div>\n";
+    page += "        <div class=\"field\">\n";
+    page += "            <div class=\"text-field text-field_floating-3\">\n";
+    page += "                <input class=\"text-field__input\" type=\"text\" id=\"PASS\" name=\"PASS\" placeholder=\"PASS\">\n";
+    page += "                <label class=\"text-field__label\" for=\"PASS\">Пароль</label>\n";
+    page += "            </div>\n";
+    page += "        </div>\n";
+    page += "        <div class=\"center\">\n";
+    page += "            <button id=\"Connect_Button\">Подключиться</button>\n";
+    page += "        </div>\n";
+    page += "        <div id=\"loader\" class=\"center\"></div>\n";
+    page += "    </div>\n";
+    page += "    </main>\n";
+
     page += HTML_JS_Index(SSIDs);
-    page += jQuery();
-    page += "</body>";
-    page += "</html>";
+
+    //page += JQuery::js1;
+    //page += jQuery();
+    //jQuery = SD.open("JQuery.js", FILE_READ);
+    //page += jQuery.readString();
+    //jQuery.close();
+    //page += jQuery_sd();
+    /*
+    jQuery = SD.open("JQuery_ajax_min.js", FILE_READ);
+    for(size_t i = 0; i < jQuery.size(); i++) {
+        char temp = (char)jQuery.read();
+        page += String(temp);
+        Serial.print(temp);
+    }
+    jQuery.close();
+    */
+    page += JQuery::JQ();
+    page += "</body>\n";
+    page += "</html>\n";
     return page;
 }
 
 String HTML_JS_Index(String SSIDs) {
-    String js = "";
+    String js = F("");
     js += "<script>\n";
     js += "   document.getElementById(\"SSID\").value = localStorage.getItem(\"SSID\")\n";
     js += "   document.getElementById(\"PASS\").value = localStorage.getItem(\"PASS\")\n";
@@ -568,12 +628,6 @@ String HTML_JS_Index(String SSIDs) {
     js += "   let APIP = \"http://"; js += WiFi.softAPIP().toString(); js += "/\"\n";
     js += "   let STAIP = \"http://"; js += WiFi.localIP().toString(); js += "/\"\n";
     js += "   let SSIDs = ["; js += SSIDs; js += "]\n";
-    js += "   //let http = new XMLHttpRequest()\n";
-    js += "   //http.open('POST', APIP, true)\n";
-    js += "   //http.setRequestHeader('Content-type', 'application/x-www-form-urlencoded')\n";
-    js += "   //http.onreadystatechange = function() {\n";
-    js += "   //if(http.readyState == 4 && http.status == 200) {\n";
-    js += "       //alert(http.responseText)}}\n";
     js += "   document.getElementById(\"Connect_Button\").addEventListener(\"click\", function (e) {\n";
     js += "       if(document.getElementById(\"SSID\").value == \"\") {\n";
     js += "           alert(\"Заполните поле \\\"Имя сети\\\" или выберите из списка доступных сетей\");\n";
@@ -583,12 +637,8 @@ String HTML_JS_Index(String SSIDs) {
     js += "           alert(\"Такой сети не существует\")\n";
     js += "           return\n";
     js += "       }\n";
-    js += "       //let params = APIP + 'connect?SSID=' + document.getElementById(\"SSID\").value + '&PASS=' + document.getElementById(\"PASS\").value\n";
-    js += "       //alert(params)\n";
-    js += "       //http.send(params);\n";
     js += "       localStorage.setItem(\"SSID\", document.getElementById(\"SSID\").value)\n";
     js += "       localStorage.setItem(\"PASS\", document.getElementById(\"PASS\").value)\n";
-    js += "       //document.location = '/SSID=' + localStorage.getItem('SSID') + 'PASS=' + localStorage.getItem('PASS')\n";
     js += "       $.ajax({\n";
     js += "           url: '/connect',\n";
     js += "           type: 'POST',\n";
@@ -603,7 +653,7 @@ String HTML_JS_Index(String SSIDs) {
     js += "       document.getElementById('SSID').value = item.querySelectorAll('div')[0].querySelectorAll('h4')[0].innerText\n";
     js += "       if(item.querySelectorAll('div')[2].querySelectorAll('h4')[0].innerText == \"Открытая сеть\"){\n";
     js += "           document.getElementsByClassName('field')[1].style = `display: none;`\n";
-    js += "           document.getElementById(\"PASS\").value = \"\"";
+    js += "           document.getElementById(\"PASS\").value = \"\"\n";
     js += "       } else {\n";
     js += "           document.getElementsByClassName('field')[1].style = `display: block;`\n";
     js += "       }\n";
@@ -613,7 +663,7 @@ String HTML_JS_Index(String SSIDs) {
 }
 
 String HTML_Style_Index() {
-    String style = "<style>";
+    String style = F("<style>");
     style += "*, *::before, *::after {box-sizing: border-box;}";
     style += "body {display: flex;justify-content: space-evenly;align-items: center;flex-wrap: nowrap;}";
     style += "main {background-color: rgb(253, 245, 217, 0.53);max-width: 750px;margin: 20px;min-width: 80%; padding: 10px;border-radius: 5px;}";
@@ -737,6 +787,23 @@ String HTML_Error(int num_of_error) {
     return page;
 }
 
-String jQuery() {
+String jQuery_link() {
     return "<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js\"></script>";
+}
+
+String jQuery_sd() {
+
+    jQuery = SD.open("JQuery_ajax.js", FILE_READ);
+    //for(size_t i = 0; i < jQuery.size(); i++) {
+    //    char temp = (char)jQuery.read();
+    //    js += String(temp);
+    //    Serial.print(js);
+    //}
+    while (jQuery.available()) {
+        JQ = jQuery.readStringUntil('\n');
+        Serial.println(JQ);
+    }
+    jQuery.close();
+    Serial.println(JQ);
+    return JQ;
 }
